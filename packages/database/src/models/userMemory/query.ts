@@ -317,6 +317,17 @@ const buildContainsCondition = (column: unknown, q?: string) => {
   return sql<boolean>`${column} ILIKE ${`%${escapeLikePattern(normalized)}%`} ESCAPE '\\'`;
 };
 
+const buildPortableTextSearchCondition = (
+  query: string,
+  columns: unknown[],
+): SQL | undefined => {
+  const conditions = columns
+    .map((column) => buildContainsCondition(column, query))
+    .filter((condition): condition is SQL<boolean> => Boolean(condition));
+
+  return conditions.length > 0 ? or(...conditions) : undefined;
+};
+
 const mergeTaxonomyRows = (
   rows: Array<{ count: number; layer: LayersEnum; value: string | null }>,
 ): QueryTaxonomyOptionsResult['labels'] => {
@@ -2192,13 +2203,14 @@ export class UserMemoryQueryModel {
       normalizedQuery
         ? candidateIds
           ? inJsonStringArray(userMemoriesActivities.id, candidateIds)
-          : buildBm25MatchCondition(normalizedQuery, [
-              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-              {
-                fields: ['narrative', 'notes', 'feedback'],
-                keyColumn: userMemoriesActivities.id,
-              },
-            ])
+          : buildPortableTextSearchCondition(normalizedQuery, [
+            userMemories.title,
+            userMemories.summary,
+            userMemories.details,
+            userMemoriesActivities.narrative,
+            userMemoriesActivities.notes,
+            userMemoriesActivities.feedback,
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesActivities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2271,13 +2283,14 @@ export class UserMemoryQueryModel {
       normalizedQuery
         ? candidateIds
           ? inJsonStringArray(userMemoriesContexts.id, candidateIds)
-          : buildBm25MatchCondition(normalizedQuery, [
-              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-              {
-                fields: ['title', 'description', 'current_status'],
-                keyColumn: userMemoriesContexts.id,
-              },
-            ])
+          : buildPortableTextSearchCondition(normalizedQuery, [
+            userMemories.title,
+            userMemories.summary,
+            userMemories.details,
+            userMemoriesContexts.title,
+            userMemoriesContexts.description,
+            userMemoriesContexts.currentStatus,
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesContexts.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2395,13 +2408,16 @@ export class UserMemoryQueryModel {
       normalizedQuery
         ? candidateIds
           ? inJsonStringArray(userMemoriesExperiences.id, candidateIds)
-          : buildBm25MatchCondition(normalizedQuery, [
-              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-              {
-                fields: ['situation', 'key_learning', 'action', 'reasoning', 'possible_outcome'],
-                keyColumn: userMemoriesExperiences.id,
-              },
-            ])
+          : buildPortableTextSearchCondition(normalizedQuery, [
+            userMemories.title,
+            userMemories.summary,
+            userMemories.details,
+            userMemoriesExperiences.situation,
+            userMemoriesExperiences.keyLearning,
+            userMemoriesExperiences.action,
+            userMemoriesExperiences.reasoning,
+            userMemoriesExperiences.possibleOutcome,
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesExperiences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2473,13 +2489,13 @@ export class UserMemoryQueryModel {
       normalizedQuery
         ? candidateIds
           ? inJsonStringArray(userMemoriesPreferences.id, candidateIds)
-          : buildBm25MatchCondition(normalizedQuery, [
-              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-              {
-                fields: ['conclusion_directives', 'suggestions'],
-                keyColumn: userMemoriesPreferences.id,
-              },
-            ])
+          : buildPortableTextSearchCondition(normalizedQuery, [
+            userMemories.title,
+            userMemories.summary,
+            userMemories.details,
+            userMemoriesPreferences.conclusionDirectives,
+            userMemoriesPreferences.suggestions,
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesPreferences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2546,10 +2562,13 @@ export class UserMemoryQueryModel {
       normalizedQuery
         ? candidateIds
           ? inJsonStringArray(userMemoriesIdentities.id, candidateIds)
-          : buildBm25MatchCondition(normalizedQuery, [
-              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-              { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
-            ])
+          : buildPortableTextSearchCondition(normalizedQuery, [
+            userMemories.title,
+            userMemories.summary,
+            userMemories.details,
+            userMemoriesIdentities.description,
+            userMemoriesIdentities.role,
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesIdentities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
