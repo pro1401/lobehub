@@ -1827,6 +1827,28 @@ describe('LobeOpenAICompatibleFactory', () => {
     });
 
     describe('responses routing', () => {
+      it('should honor an explicit Chat Completions mode for built-in Responses API models', async () => {
+        const Runtime = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.test.com/v1',
+          provider: ModelProvider.NewAPI,
+        });
+        const inst = new Runtime({ apiKey: 'test' });
+        const chatSpy = vi
+          .spyOn(inst['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+        const responsesSpy = vi.spyOn(inst['client'].responses, 'create');
+
+        await inst.chat({
+          apiMode: 'chatCompletion',
+          messages: [{ content: 'hi', role: 'user' }],
+          model: 'gpt-5.6-luna',
+          temperature: 0,
+        });
+
+        expect(chatSpy).toHaveBeenCalledOnce();
+        expect(responsesSpy).not.toHaveBeenCalled();
+      });
+
       it(
         'should route to Responses API when chatCompletion.useResponse is true',
         { timeout: 10000 },
