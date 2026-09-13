@@ -1,5 +1,50 @@
 import type { ToolCRUDType } from '@/database/schemas';
 
+/**
+ * Resolve the header required by Composio for a key-bearing MCP endpoint.
+ *
+ * Composio has two key families with different wire contracts:
+ * - consumer keys (`ck_…`) used by `connect.composio.dev` must be sent as
+ *   `x-consumer-api-key`;
+ * - project keys (`ak_…`) used by the platform MCP endpoints must be sent as
+ *   `x-api-key`.
+ *
+ * A generic MCP connector stores both values as a bearer credential, so
+ * relying on the default `Authorization: Bearer …` mapping silently produces
+ * an authenticated-looking connection with the wrong Composio context. Keep
+ * the detection deliberately narrow so ordinary bearer tokens and unrelated
+ * MCP servers retain their existing behavior.
+ */
+export const resolveComposioMcpApiKeyHeader = (
+  serverUrl: string,
+  token: string,
+): 'x-consumer-api-key' | 'x-api-key' | undefined => {
+  if (!token) return undefined;
+
+  let hostname: string;
+  try {
+    hostname = new URL(serverUrl).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+
+  if (hostname === 'connect.composio.dev' && token.startsWith('ck_')) {
+    return 'x-consumer-api-key';
+  }
+
+  if (
+    (hostname === 'backend.composio.dev' ||
+      hostname === 'mcp.composio.dev' ||
+      hostname === 'platform.composio.dev' ||
+      hostname === 'connect.composio.dev') &&
+    token.startsWith('ak_')
+  ) {
+    return 'x-api-key';
+  }
+
+  return undefined;
+};
+
 // Prefix-based matching (anchored at ^) handles camelCase names like getReactions, listPins.
 // \b word-boundary fails on camelCase because adjacent word-chars share no boundary.
 const DELETE_PREFIX = /^(?:delete|remove|destroy|drop|unlink|uninstall|clear|purge)/;

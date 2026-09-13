@@ -11,6 +11,7 @@ import { type Progress } from '@modelcontextprotocol/sdk/types.js';
 import debug from 'debug';
 
 import {
+  type HttpMCPClientParams,
   type MCPClientParams,
   type MCPError,
   type McpPrompt,
@@ -19,6 +20,7 @@ import {
   type ToolCallResult,
 } from './types';
 import { createMCPError } from './types';
+import { resolveComposioMcpApiKeyHeader } from './utils';
 
 const log = debug('lobe-mcp:client');
 // MCP tool call timeout (milliseconds), configurable via the environment variable MCP_TOOL_TIMEOUT, default is 60000
@@ -27,6 +29,60 @@ const MCP_TOOL_TIMEOUT = (() => {
   const val = Number(process.env.MCP_TOOL_TIMEOUT);
   return Number.isFinite(val) && val > 0 ? val : 60_000;
 })();
+
+/**
+ * Build the request headers for a Streamable HTTP MCP connection.
+ *
+ * Keeping this normalization in one place is important because connector
+ * manifests can be executed by the cloud runtime or forwarded to a desktop
+ * gateway. Both paths must send Composio's key in the same header.
+ */
+export const buildMcpHttpHeaders = (
+  params: Pick<HttpMCPClientParams, 'auth' | 'headers' | 'url'>,
+): Record<string, string> => {
+  const headers: Record<string, string> = { ...params.headers };
+  const bearerToken = params.auth?.type === 'bearer' ? params.auth.token : undefined;
+  const composioHeader = bearerToken
+    ? resolveComposioMcpApiKeyHeader(params.url, bearerToken)
+    : undefined;
+  const hasComposioHeader = composioHeader
+    ? Object.keys(headers).some((key) => key.toLowerCase() === composioHeader)
+    : false;
+  let auth = params.auth;
+
+  if (composioHeader && bearerToken) {
+    // A caller-provided header wins, but either way the generic bearer header
+    // must not be emitted for a Composio API key.
+    if (!hasComposioHeader) headers[composioHeader] = bearerToken;
+    auth = undefined;
+  }
+
+  if (auth) {
+    switch (auth.type) {
+      case 'bearer': {
+        if (auth.token) {
+          headers['Authorization'] = `Bearer ${auth.token}`;
+          log('Added Bearer token authentication');
+        }
+        break;
+      }
+      case 'oauth2': {
+        if (auth.accessToken) {
+          headers['Authorization'] = `Bearer ${auth.accessToken}`;
+          log('Added OAuth2 access token authentication');
+        }
+        break;
+      }
+
+      default: {
+        // No authentication required
+        break;
+      }
+    }
+  }
+
+  return headers;
+};
 
 /**
  * Pre-check stdio command to capture detailed error information
@@ -174,33 +230,8 @@ export class MCPClient {
       case 'http': {
         log('Using HTTP transport with url: %s', params.url);
 
-        // Build headers, including custom headers and authentication information
-        const headers: Record<string, string> = { ...params.headers };
-
-        // Handle authentication configuration
-        if (params.auth) {
-          switch (params.auth.type) {
-            case 'bearer': {
-              if (params.auth.token) {
-                headers['Authorization'] = `Bearer ${params.auth.token}`;
-                log('Added Bearer token authentication');
-              }
-              break;
-            }
-            case 'oauth2': {
-              if (params.auth.accessToken) {
-                headers['Authorization'] = `Bearer ${params.auth.accessToken}`;
-                log('Added OAuth2 access token authentication');
-              }
-              break;
-            }
-
-            default: {
-              // No authentication required
-              break;
-            }
-          }
-        }
+        // Build headers, including custom headers and authentication information.
+        const headers = buildMcpHttpHeaders(params);
 
         // Create StreamableHTTPClientTransport and pass headers
         this.transport = new StreamableHTTPClientTransport(new URL(params.url), {
