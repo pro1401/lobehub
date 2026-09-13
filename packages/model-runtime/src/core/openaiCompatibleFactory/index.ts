@@ -498,17 +498,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       const log = debug(`${this.logPrefix}:shouldUseResponsesAPI`);
 
-      // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
-      // These models MUST use Responses API regardless of user settings.
-      if (model && isResponsesAPIModel(model)) {
-        log('using Responses API: model %s matches built-in Responses API model rules', model);
-        return true;
-      }
-
-      // Priority 1: userApiMode is explicitly set to 'chatCompletion' (user disabled the switch)
+      // Priority 0: Honor an explicit user choice to disable the Responses API.
+      // OpenAI-compatible gateways may expose Responses-capable model IDs while only
+      // implementing the Chat Completions endpoint.
       if (userApiMode === 'chatCompletion') {
         log('using Chat Completions API: userApiMode=%s', userApiMode);
         return false;
+      }
+
+      // Priority 1: Apply built-in Responses API model rules when the user did not
+      // explicitly choose Chat Completions.
+      if (model && isResponsesAPIModel(model)) {
+        log('using Responses API: model %s matches built-in Responses API model rules', model);
+        return true;
       }
 
       // Priority 2: When user enables the switch (userApiMode === 'responses')
