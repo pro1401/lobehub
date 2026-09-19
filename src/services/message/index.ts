@@ -83,6 +83,15 @@ export interface MessageBatchMutationResult {
   success?: boolean;
 }
 
+const normalizeMessageError = (value: unknown): ChatMessageError | null | undefined => {
+  if (value === null || value === undefined) return value;
+
+  return normalizeHeterogeneousMessageError(normalizeChatMessageError(value));
+};
+
+const normalizeMessageUpdate = (value: Partial<UpdateMessageParams>) =>
+  'error' in value ? { ...value, error: normalizeMessageError(value.error) } : value;
+
 export class MessageBatchMutationError extends Error {
   constructor(public readonly result: MessageBatchMutationResult) {
     const failed = result.results?.filter((item) => !item.success) ?? [];
@@ -118,7 +127,10 @@ export class MessageService {
         return {
           id: operation.id,
           type: operation.type,
-          value: operation.value,
+          value:
+            operation.type === 'updateMessage'
+              ? normalizeMessageUpdate(operation.value)
+              : operation.value,
         };
       }),
     } as any;
@@ -253,7 +265,7 @@ export class MessageService {
   };
 
   updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
-    const error = normalizeHeterogeneousMessageError(normalizeChatMessageError(value));
+    const error = normalizeMessageError(value);
 
     return lambdaClient.message.update.mutate({
       ...ctx,
@@ -291,7 +303,7 @@ export class MessageService {
     return lambdaClient.message.update.mutate({
       ...ctx,
       id,
-      value,
+      value: normalizeMessageUpdate(value),
     });
   };
 

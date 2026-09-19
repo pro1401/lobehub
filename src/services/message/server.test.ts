@@ -1,3 +1,4 @@
+import type { ChatMessageError } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -10,6 +11,7 @@ vi.mock('@/libs/trpc/client', () => ({
       createMessage: { mutate: vi.fn() },
       getMessages: { query: vi.fn() },
       removeMessagesByAssistant: { mutate: vi.fn() },
+      update: { mutate: vi.fn() },
     },
   },
 }));
@@ -71,6 +73,90 @@ describe('MessageService', () => {
         content: 'test',
         role: 'user',
         agentId: 'agent-123',
+      });
+    });
+  });
+
+  describe('updateMessage', () => {
+    const service = new MessageService();
+
+    it('normalizes a runtime errorType before sending a message update', async () => {
+      vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({
+        success: true,
+      });
+      const malformedError = {
+        body: { provider: 'newapi' },
+        errorType: 'ModelNotFound',
+        message: 'No available channel',
+      } as unknown as ChatMessageError;
+
+      await service.updateMessage(
+        'msg-1',
+        { error: malformedError },
+        { agentId: 'agent-1', topicId: 'topic-1' },
+      );
+
+      expect(lambdaClient.message.update.mutate).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        id: 'msg-1',
+        topicId: 'topic-1',
+        value: {
+          error: expect.objectContaining({
+            body: expect.objectContaining({ provider: 'newapi' }),
+            message: 'No available channel',
+            type: 'ModelNotFound',
+          }),
+        },
+      });
+    });
+
+    it('adds a stable fallback type when an error update has no runtime type', async () => {
+      vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({
+        success: true,
+      });
+      const malformedError = {
+        message: 'Unclassified failure',
+      } as unknown as ChatMessageError;
+
+      await service.updateMessage('msg-1', {
+        error: malformedError,
+      });
+
+      expect(lambdaClient.message.update.mutate).toHaveBeenCalledWith({
+        id: 'msg-1',
+        value: {
+          error: expect.objectContaining({
+            body: { message: 'Unclassified failure' },
+            message: 'Unclassified failure',
+            type: 'AgentRuntimeError',
+          }),
+        },
+      });
+    });
+
+    it('normalizes the dedicated runtime error update path', async () => {
+      vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({
+        success: true,
+      });
+      const runtimeError = Object.assign(new Error('No available channel'), {
+        errorType: 'ModelNotFound',
+      }) as unknown as ChatMessageError;
+
+      await service.updateMessageError('msg-1', runtimeError, { topicId: 'topic-1' });
+
+      expect(lambdaClient.message.update.mutate).toHaveBeenCalledWith({
+        id: 'msg-1',
+        topicId: 'topic-1',
+        value: {
+          error: expect.objectContaining({
+            body: expect.objectContaining({
+              errorType: 'ModelNotFound',
+              message: 'No available channel',
+            }),
+            message: 'No available channel',
+            type: 'ModelNotFound',
+          }),
+        },
       });
     });
   });
