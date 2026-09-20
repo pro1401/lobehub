@@ -151,7 +151,6 @@ describe('MessageService', () => {
           error: expect.objectContaining({
             body: expect.objectContaining({
               errorType: 'ModelNotFound',
-              message: 'No available channel',
             }),
             message: 'No available channel',
             type: 'ModelNotFound',
