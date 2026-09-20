@@ -294,10 +294,23 @@ export class ToolExecutionService {
 
       log('MCP tool execution successful for: %s:%s', identifier, apiName);
 
+      if (typeof result === 'string') {
+        return { content: result, success: true };
+      }
+
+      // MCPService already converts the protocol content blocks into the
+      // model-facing `content` string and keeps the full structured payload in
+      // `state` for the UI. Serializing the whole processed result here would
+      // duplicate both representations in the LLM context (particularly large
+      // for Composio meta-tools) and would also turn MCP failures into successes.
       return {
-        content: typeof result === 'string' ? result : JSON.stringify(result),
-        state: typeof result === 'object' ? result : undefined,
-        success: true,
+        content:
+          typeof result?.content === 'string'
+            ? result.content
+            : JSON.stringify(result?.content ?? result),
+        error: result?.error,
+        state: result?.state ?? result,
+        success: typeof result?.success === 'boolean' ? result.success : true,
       };
     } catch (error) {
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);

@@ -561,6 +561,47 @@ describe('ToolExecutionService', () => {
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     });
 
+    it('uses processed MCP content without serializing the full UI state into model context', async () => {
+      (deviceGateway as any).isConfigured = false;
+      const state = {
+        content: [{ text: 'x'.repeat(50_000), type: 'text' }],
+        isError: false,
+      };
+      const callTool = vi.fn().mockResolvedValue({
+        content: 'compact model-facing result',
+        state,
+        success: true,
+      });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(result.content).toBe('compact model-facing result');
+      expect(result.state).toBe(state);
+    });
+
+    it('preserves a processed MCP failure instead of reporting it as successful', async () => {
+      (deviceGateway as any).isConfigured = false;
+      const callTool = vi.fn().mockResolvedValue({
+        content: 'remote tool failed',
+        error: { code: 'REMOTE_ERROR', message: 'remote tool failed' },
+        state: { content: [], isError: true },
+        success: false,
+      });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: 'REMOTE_ERROR', message: 'remote tool failed' });
+    });
+
     it('fails fast when no device is reachable instead of executing on the server', async () => {
       // With a gateway configured (cloud), a device-only endpoint must never
       // run in-process — that would spawn the command / fetch the private URL
