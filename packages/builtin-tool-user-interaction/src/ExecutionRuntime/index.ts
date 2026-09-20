@@ -1,3 +1,4 @@
+import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user/normalize';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -33,7 +34,9 @@ export class UserInteractionExecutionRuntime {
   private interactions: Map<string, InteractionState> = new Map();
 
   async askUserQuestion(args: unknown): Promise<BuiltinServerRuntimeOutput> {
-    const parsed = askUserQuestionArgsSchema.safeParse(args);
+    const parsed = askUserQuestionArgsSchema.safeParse({
+      questions: normalizeAskUserQuestions(args),
+    });
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
       return {

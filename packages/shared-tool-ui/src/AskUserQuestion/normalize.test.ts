@@ -94,6 +94,38 @@ describe('normalizeAskUserQuestions', () => {
     expect(normalizeAskUserQuestions({ questions: JSON.stringify(expected) })).toEqual(expected);
   });
 
+  it('parses repeatedly encoded question envelopes and options', () => {
+    const question = {
+      header: 'Mode',
+      options: JSON.stringify([{ label: 'Auto' }, { label: 'Manual' }]),
+      question: 'Which mode?',
+    };
+    const encodedEnvelope = JSON.stringify({ questions: JSON.stringify([question]) });
+
+    expect(normalizeAskUserQuestions({ questions: JSON.stringify(encodedEnvelope) })).toEqual([
+      {
+        header: 'Mode',
+        options: [{ label: 'Auto' }, { label: 'Manual' }],
+        question: 'Which mode?',
+      },
+    ]);
+  });
+
+  it('recovers complete questions from a truncated nested JSON string', () => {
+    expect(
+      normalizeAskUserQuestions({
+        questions:
+          '[{"header":"Mode","question":"Which mode?","options":[{"label":"Auto"},{"label":"Manual"}]}',
+      }),
+    ).toEqual([
+      {
+        header: 'Mode',
+        options: [{ label: 'Auto' }, { label: 'Manual' }],
+        question: 'Which mode?',
+      },
+    ]);
+  });
+
   it('strips the "(Recommended)" label marker into the recommended flag', () => {
     const questions = normalizeAskUserQuestions({
       questions: [

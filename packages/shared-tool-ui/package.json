@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ask-user": "./src/AskUserQuestion/index.ts",
+    "./ask-user/normalize": "./src/AskUserQuestion/normalize.ts",
     "./components": "./src/components/index.ts",
     "./inspectors": "./src/Inspector/index.ts",
     "./inspectors/github-labels": "./src/Inspector/GitHub/labels.ts",

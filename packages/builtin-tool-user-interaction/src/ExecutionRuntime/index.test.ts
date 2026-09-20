@@ -26,6 +26,16 @@ describe('UserInteractionExecutionRuntime', () => {
     expect(result.state.question).toEqual(sampleArgs);
   });
 
+  it('accepts questions serialized as a nested JSON string', async () => {
+    const runtime = new UserInteractionExecutionRuntime();
+    const result = await runtime.askUserQuestion({
+      questions: JSON.stringify(sampleArgs.questions),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.state.question).toEqual(sampleArgs);
+  });
+
   it('rejects invalid args (fewer than 2 options)', async () => {
     const runtime = new UserInteractionExecutionRuntime();
     const result = await runtime.askUserQuestion({

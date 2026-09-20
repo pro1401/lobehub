@@ -1,15 +1,22 @@
 import { pickString, toRecord } from '@lobechat/utils/object';
+import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils/safeParseJSON';
 
 import type { AskUserQuestionArgs, AskUserQuestionItem, AskUserQuestionOption } from './types';
 
 const parseJsonString = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value;
+  let parsed = value;
 
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return value;
+  // Weakly schema-compliant models sometimes serialize either the complete
+  // args object or one of its nested fields more than once. Keep the repair
+  // bounded so ordinary question text can never turn into an unbounded parse
+  // loop, while still accepting the forms observed in persisted tool calls.
+  for (let depth = 0; depth < 3 && typeof parsed === 'string'; depth += 1) {
+    const next = safeParseJSON<unknown>(parsed) ?? safeParsePartialJSON<unknown>(parsed);
+    if (next === undefined || next === parsed) break;
+    parsed = next;
   }
+
+  return parsed;
 };
 
 /**
@@ -60,7 +67,7 @@ const normalizeQuestion = (value: unknown): AskUserQuestionItem | undefined => {
 
   if (!question) return;
 
-  const rawOptions = item?.options;
+  const rawOptions = parseJsonString(item?.options);
   const options = Array.isArray(rawOptions)
     ? rawOptions.map(normalizeOption).filter(isQuestionOption)
     : [];
@@ -88,7 +95,9 @@ export const normalizeAskUserQuestions = (
 ): AskUserQuestionItem[] => {
   const parsedArgs = parseJsonString(args);
   const rawArgs = toRecord(parsedArgs);
-  const rawQuestions = parseJsonString(rawArgs?.questions ?? parsedArgs);
+  const parsedQuestions = parseJsonString(rawArgs?.questions ?? parsedArgs);
+  const nestedQuestions = toRecord(parsedQuestions)?.questions;
+  const rawQuestions = parseJsonString(nestedQuestions ?? parsedQuestions);
 
   if (Array.isArray(rawQuestions)) {
     return rawQuestions.map(normalizeQuestion).filter(isQuestionItem);
