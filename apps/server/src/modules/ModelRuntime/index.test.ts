@@ -31,9 +31,23 @@ import {
   getServerDefaultHeterogeneousModels,
   initModelRuntimeFromServerConfig,
   initModelRuntimeWithUserPayload,
+  resolveProviderDefaultApiMode,
   resolveServerDefaultHeterogeneousModel,
   resolveServerModel,
 } from './index';
+
+describe('resolveProviderDefaultApiMode', () => {
+  it('defaults OpenAI to Responses API and compatible providers to Chat Completions', () => {
+    expect(resolveProviderDefaultApiMode(ModelProvider.OpenAI)).toBe('responses');
+    expect(resolveProviderDefaultApiMode(ModelProvider.NewAPI)).toBe('chatCompletion');
+    expect(resolveProviderDefaultApiMode('custom-provider')).toBe('chatCompletion');
+  });
+
+  it('honors an explicit provider setting', () => {
+    expect(resolveProviderDefaultApiMode(ModelProvider.NewAPI, true)).toBe('responses');
+    expect(resolveProviderDefaultApiMode(ModelProvider.OpenAI, false)).toBe('chatCompletion');
+  });
+});
 
 const getServerGlobalConfig = vi.hoisted(() => vi.fn());
 const loadModels = vi.hoisted(() => vi.fn());

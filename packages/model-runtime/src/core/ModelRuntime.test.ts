@@ -105,6 +105,33 @@ describe('ModelRuntime', () => {
   });
 
   describe('ModelRuntime chat method', () => {
+    it('should apply the runtime default API mode when the request does not specify one', async () => {
+      const chat = vi.fn().mockResolvedValue(new Response(''));
+      const runtime = new ModelRuntime({ chat }, undefined, 'chatCompletion');
+      const payload: ChatStreamPayload = {
+        messages: [{ content: 'Hello, world!', role: 'user' }],
+        model: 'gpt-5.6-luna',
+      };
+
+      await runtime.chat(payload);
+
+      expect(chat).toHaveBeenCalledWith({ ...payload, apiMode: 'chatCompletion' }, undefined);
+    });
+
+    it('should preserve an explicit per-request API mode over the runtime default', async () => {
+      const chat = vi.fn().mockResolvedValue(new Response(''));
+      const runtime = new ModelRuntime({ chat }, undefined, 'chatCompletion');
+      const payload: ChatStreamPayload = {
+        apiMode: 'responses',
+        messages: [{ content: 'Hello, world!', role: 'user' }],
+        model: 'gpt-5.6-luna',
+      };
+
+      await runtime.chat(payload);
+
+      expect(chat).toHaveBeenCalledWith(payload, undefined);
+    });
+
     it('should run correctly', async () => {
       const payload: ChatStreamPayload = {
         messages: [{ role: 'user', content: 'Hello, world!' }],

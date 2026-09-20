@@ -139,12 +139,18 @@ export interface ModelRuntimeHooks {
 }
 
 export class ModelRuntime {
+  private _defaultApiMode?: ChatStreamPayload['apiMode'];
   private _hooks?: ModelRuntimeHooks;
   private _runtime: LobeRuntimeAI;
 
-  constructor(runtime: LobeRuntimeAI, hooks?: ModelRuntimeHooks) {
+  constructor(
+    runtime: LobeRuntimeAI,
+    hooks?: ModelRuntimeHooks,
+    defaultApiMode?: ChatStreamPayload['apiMode'],
+  ) {
     this._runtime = runtime;
     this._hooks = hooks;
+    this._defaultApiMode = defaultApiMode;
   }
 
   /**
@@ -177,12 +183,16 @@ export class ModelRuntime {
    * ```
    */
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    const runtimePayload =
+      this._defaultApiMode && payload.apiMode === undefined
+        ? { ...payload, apiMode: this._defaultApiMode }
+        : payload;
     const metadata = getLobeHubTimingMetadata(options);
     const startedAt = Date.now();
     if (metadata) {
       timing(
         'ModelRuntime.chat start model=%s trigger=%s traceId=%s',
-        payload.model,
+        runtimePayload.model,
         metadata.trigger,
         metadata.traceId,
       );
@@ -198,21 +208,21 @@ export class ModelRuntime {
 
     try {
       const hooksStartedAt = Date.now();
-      const finalOptions = await this.applyHooks(payload, options);
+      const finalOptions = await this.applyHooks(runtimePayload, options);
       if (metadata) {
         timing(
           'ModelRuntime.chat hooks done model=%s durationMs=%d traceId=%s',
-          payload.model,
+          runtimePayload.model,
           getDurationMs(hooksStartedAt),
           metadata.traceId,
         );
       }
       const runtimeStartedAt = Date.now();
-      const response = await this._runtime.chat(payload, finalOptions);
+      const response = await this._runtime.chat(runtimePayload, finalOptions);
       if (metadata) {
         timing(
           'ModelRuntime.chat runtime done model=%s durationMs=%d totalMs=%d traceId=%s',
-          payload.model,
+          runtimePayload.model,
           getDurationMs(runtimeStartedAt),
           getDurationMs(startedAt),
           metadata.traceId,
@@ -223,14 +233,17 @@ export class ModelRuntime {
       if (metadata) {
         timing(
           'ModelRuntime.chat error model=%s durationMs=%d traceId=%s',
-          payload.model,
+          runtimePayload.model,
           getDurationMs(startedAt),
           metadata.traceId,
         );
       }
       if (this._hooks?.onChatError) {
         const errorHookStartedAt = Date.now();
-        await this._hooks.onChatError(error as ChatCompletionErrorPayload, { options, payload });
+        await this._hooks.onChatError(error as ChatCompletionErrorPayload, {
+          options,
+          payload: runtimePayload,
+        });
         if (metadata) {
           timing(
             'ModelRuntime.chat onChatError done model=%s durationMs=%d traceId=%s',
@@ -513,6 +526,7 @@ export class ModelRuntime {
         }
     >,
     hooks?: ModelRuntimeHooks,
+    defaultApiMode?: ChatStreamPayload['apiMode'],
   ) {
     // runtime map does not include every provider id (e.g. vertex), so index loosely
     const runtimeMap: Partial<Record<string, new (params: any) => LobeRuntimeAI>> =
@@ -521,6 +535,6 @@ export class ModelRuntime {
 
     const runtimeModel: LobeRuntimeAI = new providerAI(params);
 
-    return new ModelRuntime(runtimeModel, hooks);
+    return new ModelRuntime(runtimeModel, hooks, defaultApiMode);
   }
 }

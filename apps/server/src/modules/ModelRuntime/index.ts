@@ -7,6 +7,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import {
   AgentRuntimeError,
+  type ChatStreamPayload,
   mergeModelRuntimeHooks,
   ModelRuntime,
   type ModelRuntimeHooks,
@@ -425,6 +426,7 @@ export const initModelRuntimeWithUserPayload = (
   payload: ClientSecretPayload,
   params: any = {},
   hooks?: ModelRuntimeHooks,
+  defaultApiMode?: ChatStreamPayload['apiMode'],
 ) => {
   const runtimeProvider = payload.runtimeProvider ?? provider;
 
@@ -443,7 +445,7 @@ export const initModelRuntimeWithUserPayload = (
     const vertexOptions = buildVertexOptions(payload, params);
     const runtime = LobeVertexAI.initFromVertexAI(vertexOptions);
 
-    return new ModelRuntime(runtime, hooks);
+    return new ModelRuntime(runtime, hooks, defaultApiMode);
   }
 
   return ModelRuntime.initializeWithProvider(
@@ -453,7 +455,19 @@ export const initModelRuntimeWithUserPayload = (
       ...params,
     },
     hooks,
+    defaultApiMode,
   );
+};
+
+export const resolveProviderDefaultApiMode = (
+  provider: string,
+  enableResponseApi?: boolean,
+): ChatStreamPayload['apiMode'] => {
+  if (typeof enableResponseApi === 'boolean') {
+    return enableResponseApi ? 'responses' : 'chatCompletion';
+  }
+
+  return provider === ModelProvider.OpenAI ? 'responses' : 'chatCompletion';
 };
 
 /**
@@ -527,8 +541,19 @@ export const initModelRuntimeFromDB = async (
   const tracingHooks = createLLMGenerationTracingHook(userId, provider, workspaceId);
   const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
 
+  const defaultApiMode = resolveProviderDefaultApiMode(
+    provider,
+    providerConfig?.config?.enableResponseApi,
+  );
+
   // 6. Initialize ModelRuntime with the payload and hooks
-  return initModelRuntimeWithUserPayload(provider, payload, { userId, workspaceId }, hooks);
+  return initModelRuntimeWithUserPayload(
+    provider,
+    payload,
+    { userId, workspaceId },
+    hooks,
+    defaultApiMode,
+  );
 };
 
 export interface ServerDefaultHeterogeneousModelReference {
