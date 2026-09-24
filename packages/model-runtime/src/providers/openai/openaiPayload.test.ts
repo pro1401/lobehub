@@ -19,6 +19,17 @@ describe('OpenAI payload handlers', () => {
     },
   );
 
+  it('keeps an explicitly selected Chat Completions mode for Responses-capable models', () => {
+    const result = params.chatCompletion.handlePayload({
+      apiMode: 'chatCompletion',
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gpt-5.6-luna',
+      temperature: 0.7,
+    });
+
+    expect(result.apiMode).toBe('chatCompletion');
+  });
+
   it('should keep GPT-5 chat-latest variants on Chat Completions', () => {
     const result = params.chatCompletion.handlePayload({
       messages: [{ content: 'Hello', role: 'user' }],

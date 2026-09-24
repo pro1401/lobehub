@@ -34,7 +34,13 @@ export const params = {
       const { enabledSearch, model, ...rest } = payload;
       const containsAudioInput = hasAudioInput(payload);
 
-      if (!containsAudioInput && (isResponsesAPIModel(model) || enabledSearch)) {
+      // OpenAI-compatible gateways may expose a Responses-capable model ID without
+      // implementing /v1/responses. Preserve the caller's explicit endpoint choice.
+      if (
+        !containsAudioInput &&
+        payload.apiMode !== 'chatCompletion' &&
+        (isResponsesAPIModel(model) || enabledSearch)
+      ) {
         return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
       }
 
